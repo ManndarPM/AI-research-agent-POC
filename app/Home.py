@@ -1,18 +1,26 @@
 import streamlit as st
 import requests
 
-st.set_page_config(page_title="AI Research Assistant - Demo", layout="wide")
-st.title("AI Research Assistant — Demo (Step 1)")
+st.set_page_config(page_title="AI Research Assistant", layout="wide")
+st.title("AI Research Assistant — Step 2")
 
-st.write("This is a minimal Streamlit UI. It will call FastAPI below.")
+query = st.text_input("Ask something:")
 
-query = st.text_input("Ask something (demo):", "")
 if st.button("Send to API"):
     try:
-        resp = requests.get("http://localhost:8000/")
-        st.write("API response:", resp.json())
+        resp = requests.post(
+            "http://localhost:8000/ask",
+            json={"query": query}
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            st.subheader("Answer")
+            st.write(data["answer"])
+
+            st.subheader("Citations")
+            for c in data["citations"]:
+                st.markdown(f"- [{c['title']}]({c['url']})")
+        else:
+            st.error(f"API error: {resp.status_code} {resp.text}")
     except Exception as e:
         st.error(f"Could not reach API: {e}")
-
-st.write("---")
-st.write("When FastAPI is running at http://localhost:8000/ you should see a JSON response above.")
