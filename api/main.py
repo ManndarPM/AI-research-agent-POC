@@ -53,15 +53,42 @@ def ask(request: AskRequest):
     query = request.query
 
     # 1. Try uploaded docs
-    doc_results = retrieve_similar(query, k=3)
+    doc_results = retrieve_similar(query, k=10)
     if doc_results:
-        snippets = []
-        for r in doc_results:
-            preview = r["text"][:800].replace("\n", " ")
-            snippets.append(f"Document [{r['doc_id']}]: {preview}")
-        context_text = "\n".join(snippets)
-        results = [{"title": f"Uploaded: {r['doc_id']}", "url": f"/data/uploads/{r['doc_id']}"} for r in doc_results]
+            # Step 2: Ask Gemini to rerank them
+            snippets = []
+            for i, c in enumerate(doc_results):
+                clean_text = c["text"][:500].replace("\n", " ")
+                snippets.append(f"[{i}] {clean_text}")
+
+            rerank_prompt = f"""
+            You are helping rank document passages.
+            Query: {query}
+
+            Passages:
+            {chr(10).join(snippets)}
+
+            Task: Pick the 3 passages that are most relevant to the query.
+            Reply ONLY with their indices (comma-separated).
+            """
+
+            try:
+                model = genai.GenerativeModel("gemini-1.5-flash")
+                rerank_response = model.generate_content(rerank_prompt)
+                if rerank_response and hasattr(rerank_response, "text") and rerank_response.text:
+                    indices = [int(x) for x in rerank_response.text.split(",") if x.strip().isdigit()]
+                    indices = [i for i in indices if 0 <= i < len(doc_results)]
+                else:
+                    indices = list(range(min(3, len(doc_results))))
+            except Exception:
+                indices = list(range(min(3, len(doc_results))))
+
+            # Step 3: Build context from reranked chunks
+            chosen = [doc_results[i] for i in indices[:3]]
+            context_text = "\n".join([c["text"][:800].replace("\n", " ") for c in chosen])
+            results = [{"title": f"Uploaded: {c['doc_id']}", "url": f"/data/uploads/{c['doc_id']}"} for c in chosen]
     else:
+        # Fallback to web search
         results = []
         with DDGS() as ddgs:
             for r in ddgs.text(query, max_results=3):
@@ -77,25 +104,16 @@ def ask(request: AskRequest):
         Sources:
         {context_text}
 
-        Write a concise answer (3-4 sentences) using the sources above.
-        Don't invent info. If unsure, say so.
+        Write a concise answer (3-6 sentences) using ONLY the sources above.
+        If the sources do not contain the answer, say so.
         """
     else:
-        prompt = f"""
-        You are a research assistant.
-        Question: {query}
+        prompt = f"Answer the question: {query}"
 
-        Provide a concise answer (3-4 sentences). If unsure, say so.
-        """
-
-    # 3. Gemini call
     try:
         model = genai.GenerativeModel("gemini-1.5-flash")
         response = model.generate_content(prompt)
-        if response and hasattr(response, "text") and response.text:
-            answer = response.text
-        else:
-            answer = "No answer returned by Gemini."
+        answer = response.text if response and hasattr(response, "text") else "No answer returned by Gemini."
     except Exception as e:
         answer = f"Error calling Gemini API: {e}"
 

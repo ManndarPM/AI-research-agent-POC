@@ -88,7 +88,7 @@ def index_document(file_path: str, doc_id: str) -> List[Dict]:
     save_index()
     return added
 
-def retrieve_similar(query: str, k: int = 3) -> List[Dict]:
+def retrieve_similar(query: str, k: int = 10) -> List[Dict]:
     if len(INDEX["chunks"]) == 0:
         return []
 
@@ -105,6 +105,8 @@ def retrieve_similar(query: str, k: int = 3) -> List[Dict]:
         qv = INDEX["tfidf_vectorizer"].transform([query])
         sims = cosine_similarity(qv, INDEX["tfidf"]).flatten()
         top_idx = sims.argsort()[::-1][:k]
-        return [{"doc_id": INDEX["chunks"][i]["doc_id"], "text": INDEX["chunks"][i]["text"], "score": float(sims[i])} for i in top_idx]
-
+        return [
+                    {"doc_id": INDEX["chunks"][i]["doc_id"], "text": INDEX["chunks"][i]["text"], "score": float(sims[i])}
+                    for i in top_idx
+                ]
     return []
