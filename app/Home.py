@@ -27,7 +27,13 @@ if st.button("Send to API"):
             data = resp.json()
             st.subheader("Answer")
             st.write(data["answer"])
-
+        if data["citations"]:
+            for c in data["citations"]:
+                score = c.get("score", None)
+                if score is not None:
+                    st.markdown(f"- **{c['title']}** (score={score:.4f}) — [link]({c['url']})")
+                # else:
+                #     st.markdown(f"- **{c['title']}** — [link]({c['url']})")
             # st.subheader("Citations")
             # for c in data["citations"]:
             #     st.markdown(f"- [{c['title']}]({c['url']})")
